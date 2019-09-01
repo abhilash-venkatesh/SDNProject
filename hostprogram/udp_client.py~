@@ -7,9 +7,8 @@ import random
 
 clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 UDP_IP_ADDRESS = ""
-UDP_PORT_NO = 0
-hostname = socket.gethostname()    
-sourceIP = socket.gethostbyname(hostname)
+UDP_PORT_NO = 0    
+sourceIP = get_ip()
 
 program_name = sys.argv[0]
 arguments = sys.argv[1:]
@@ -31,11 +30,12 @@ if count == 0:
 	sendRequest(str(request))
 else:
 	request = { 'rid':random.randint(1,99999), 'bandwidth':int(arguments[2]), 'ip_src':arguments[3], 'ip_dst':arguments[4], 'timeout':int(arguments[5])}
+	print "rid"+str(request['rid'])
 	UDP_IP_ADDRESS = arguments[0]
 	UDP_PORT_NO = int(arguments[1])
 	sendRequest(str(request))
 
-print(sourceIP)
+print "Waiting for controller response ... "
 serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 serverSock.bind((sourceIP, 10000))
 response, addr = serverSock.recvfrom(1024)

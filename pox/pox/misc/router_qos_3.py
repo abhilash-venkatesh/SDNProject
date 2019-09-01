@@ -17,6 +17,7 @@ import pox
 import ast
 
 from abhilashmodule import *
+import threading
 
 log = pox.core.getLogger()
 
@@ -24,8 +25,16 @@ s1_dpid=0
 s2_dpid=0
 s3_dpid=0
 
+bandwidth_modified = False #SOLVE BANDWIDTH MODIFICATION PROBLEM
 bandwidth=1000 #Mbits/sec
 
+def timer(timeout,bandwidth_this,rid):
+	print "\n*--Timer Thread : Running--* "
+	global bandwidth
+	time.sleep(timeout)
+	bandwidth += bandwidth_this
+	print "\n*--Timer Thread : Time's up for rid "+str(rid)+". Bandwidth has been restored to :",str(bandwidth),"--*"
+	
 class Switch(object):
   def __init__ (self, connection, s_dpid):
     self.connection = connection
@@ -230,8 +239,10 @@ class Router(object):
 
     def handleBandwidthRequest(self, request):
 	global bandwidth
-	print "\nThe request is : "+str(request)
+	
 	dic = ast.literal_eval(request)
+	print "\nReceived rid : "+str(dic['rid'])
+	print "\nThe request is : "+str(request)
 	print "\nDic output works : Requested bandwidth is "+str(dic['bandwidth'])+"!"
 	
 	routable, destination_network = self.checkRoutableDestination(dic['ip_dst'])
@@ -259,19 +270,19 @@ class Router(object):
 					pass 
 				print "ARP Response was received!"
 			self.delete_flow_label(dic['ip_src'])
-			self.push_flow_label_bandwidth(dic['ip_src'],dic['ip_dst'],output_port,dic['timeout'],dic['bandwidth'],destination_network)
+			self.push_flow_label_bandwidth(dic['ip_src'],dic['ip_dst'],output_port,dic['timeout'],dic['bandwidth'],destination_network,dic['rid'])
 			print "The NEW BANDWIDTH TABLES ARE :"+str(self.allocated_bandwidths)
 			
 			bandwidth = bandwidth - int(dic['bandwidth'])
 			print "#\nREMAINING BANDWIDTH :"+str(bandwidth)
 			self.send_UDP_response(100, dic['ip_src'], bandwidth)
-			print "\n#UDP Response Sent#"
+			print "\n#UDP Response Sent for rid "+str(dic['rid'])+"#"
 			print "\n#Done#"
 		else:
 			print "#Insufficient bandwidth on "+ self.port_to_interface[out_port]#"
 			self.send_UDP_response(50, dic['ip_src'], bandwidth)
     
-    def push_flow_label_bandwidth(self, source_ip, dest_ip, out_port, timeout, bandwidth_this,destination_network):
+    def push_flow_label_bandwidth(self, source_ip, dest_ip, out_port, timeout, bandwidth_this,destination_network,rid):
 	output_interface = self.port_to_interface[out_port]
 
 	msg = of.ofp_flow_mod()
@@ -297,6 +308,9 @@ class Router(object):
 	msg.actions.append(of.ofp_action_enqueue(port = out_port, queue_id=self.bandwidth_to_queue[bandwidth_this]))
 	self.connection.send(msg)
 
+	print "\n#Starting thread to keep track of connection time#"
+	t1 = threading.Thread(target=timer, args=(timeout,bandwidth_this,rid))
+	t1.start()
 	self.allocated_bandwidths[output_interface][source_ip] = {'dest_ip': dest_ip,'bandwidth': self.bandwidth_to_queue[bandwidth_this]} #queueno denotes bandwidth
 
     def delete_flow_label(self, source_ip):
